@@ -1,0 +1,152 @@
+---
+alwaysApply: true
+---
+
+# Clerk Authentication & Authorization
+
+All authentication in this project is handled by **Clerk**.
+
+## Core Security Principle
+
+**Users must ONLY be able to access their own data.** Every database query and API endpoint must verify user ownership before allowing access.
+
+## Authentication
+
+- Clerk handles all user authentication (sign-in, sign-up, session management)
+- Import authentication helpers from `@clerk/nextjs`:
+  ```typescript
+  import { auth, currentUser } from '@clerk/nextjs/server';
+  ```
+
+## Authorization Rules
+
+### 1. Always Get the Current User ID
+
+Before any data access operation, always get the authenticated user's ID:
+
+```typescript
+import { auth } from '@clerk/nextjs/server';
+
+const { userId } = await auth();
+
+if (!userId) {
+  // Return 401 Unauthorized or redirect to sign-in
+  return new Response('Unauthorized', { status: 401 });
+}
+```
+
+### 2. Filter Database Queries by User ID
+
+**ALWAYS** filter database queries by the current user's ID when accessing user-specific data:
+
+```typescript
+import { db } from '@/db';
+import { decksTable } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
+
+// ✅ CORRECT - Filters by userId
+const userDecks = await db
+  .select()
+  .from(decksTable)
+  .where(eq(decksTable.userId, userId));
+
+// ❌ WRONG - Returns all decks regardless of owner
+const allDecks = await db.select().from(decksTable);
+```
+
+### 3. Verify Ownership Before Modifications
+
+When updating or deleting data, **ALWAYS** verify the user owns the resource:
+
+```typescript
+// ✅ CORRECT - Verifies ownership
+const [deck] = await db
+  .select()
+  .from(decksTable)
+  .where(
+    and(
+      eq(decksTable.id, deckId),
+      eq(decksTable.userId, userId)
+    )
+  );
+
+if (!deck) {
+  return new Response('Not found or unauthorized', { status: 404 });
+}
+
+// Proceed with update/delete
+```
+
+### 4. Protect API Routes
+
+All API routes must check authentication:
+
+```typescript
+// app/api/decks/route.ts
+import { auth } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
+
+export async function GET() {
+  const { userId } = await auth();
+  
+  if (!userId) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  
+  // Fetch only this user's data
+  const decks = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId));
+  
+  return NextResponse.json(decks);
+}
+```
+
+### 5. Protect Server Components
+
+For server components, use `auth()` to get the current user:
+
+```typescript
+import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
+
+export default async function DashboardPage() {
+  const { userId } = await auth();
+  
+  if (!userId) {
+    redirect('/sign-in');
+  }
+  
+  // Fetch user-specific data
+  const decks = await db
+    .select()
+    .from(decksTable)
+    .where(eq(decksTable.userId, userId));
+  
+  return <div>{/* Render decks */}</div>;
+}
+```
+
+## Critical Checklist
+
+Before deploying any feature that accesses data:
+
+- [ ] Does it get the current `userId` from Clerk?
+- [ ] Does it check if `userId` exists (user is authenticated)?
+- [ ] Do all database queries filter by `userId` for user-specific data?
+- [ ] Are ownership checks in place before updates/deletes?
+- [ ] Can one user access another user's data? (Answer must be NO)
+
+## Common Mistakes to Avoid
+
+❌ **Never** fetch all records without filtering by user
+❌ **Never** trust client-side user IDs - always use server-side auth
+❌ **Never** use route parameters as the sole source of user identification
+❌ **Never** skip authentication checks on API routes
+❌ **Never** assume middleware alone is sufficient - check in handlers too
+
+## Resources
+
+- Clerk Documentation: [middleware.ts](mdc:src/middleware.ts)
+- Database Schema: [schema.ts](mdc:src/db/schema.ts)

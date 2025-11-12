@@ -1,0 +1,67 @@
+---
+alwaysApply: true
+description: Guidelines for using shadcn/ui components in this project
+---
+
+# shadcn/ui Component Guidelines
+
+This project uses **shadcn/ui** for all UI elements and components.
+
+## Installation
+
+### Initial Setup
+
+If shadcn/ui is not initialized in the project, use:
+
+```bash
+npx shadcn@latest init
+```
+
+### Adding Components
+
+To install a specific shadcn/ui component, use the following command pattern:
+
+```bash
+npx shadcn@latest add [component-name]
+```
+
+**Examples:**
+- Button: `npx shadcn@latest add button`
+- Card: `npx shadcn@latest add card`
+- Dialog: `npx shadcn@latest add dialog`
+- Form: `npx shadcn@latest add form`
+- Input: `npx shadcn@latest add input`
+
+## Usage Rules
+
+1. **Always use shadcn/ui components** for UI elements instead of creating custom components from scratch
+2. **Check if a component exists** in the shadcn/ui library before implementing custom UI
+3. **Install components as needed** - if a required component is not yet installed, add it using the command above
+4. **Follow shadcn/ui conventions** for styling and component composition
+5. **Use Tailwind CSS** for styling as shadcn/ui is built on top of it
+
+## Common Components
+
+The most frequently used shadcn/ui components include:
+- `button` - Buttons and interactive elements
+- `card` - Card containers
+- `input` - Form inputs
+- `label` - Form labels
+- `dialog` - Modal dialogs
+- `dropdown-menu` - Dropdown menus
+- `form` - Form handling with react-hook-form
+- `toast` - Toast notifications
+- `alert` - Alert messages
+- `badge` - Badges and tags
+- `avatar` - User avatars
+- `tabs` - Tab navigation
+- `select` - Select dropdowns
+- `checkbox` - Checkboxes
+- `radio-group` - Radio buttons
+
+## Before Building UI
+
+Before implementing any UI feature:
+1. Check if shadcn/ui has a suitable component
+2. If the component is not installed, run the appropriate `npx shadcn@latest add` command
+3. Import and use the component from `@/components/ui/[component-name]`

@@ -1,0 +1,202 @@
+---
+alwaysApply: true
+---
+
+# Data Operations & Server Architecture
+
+This project follows strict server-side data handling patterns with Next.js App Router.
+
+## Data Retrieval
+
+**All data fetching must be done in Server Components.**
+
+- Never fetch data in Client Components
+- Use Server Components to query the database and pass data as props to Client Components
+- Import database utilities from [index.ts](mdc:src/db/index.ts) and schema from [schema.ts](mdc:src/db/schema.ts)
+
+**Example:**
+
+```typescript
+// app/dashboard/page.tsx (Server Component)
+import { db } from '@/db';
+import { decksTable } from '@/db/schema';
+import { auth } from '@clerk/nextjs/server';
+import { eq } from 'drizzle-orm';
+
+export default async function DashboardPage() {
+	const { userId } = await auth();
+
+	// Fetch data in Server Component
+	const decks = await db
+		.select()
+		.from(decksTable)
+		.where(eq(decksTable.userId, userId));
+
+	return <ClientComponent decks={decks} />;
+}
+```
+
+## Data Mutations
+
+**All database mutations (INSERT, UPDATE, DELETE) must be done via Server Actions.**
+
+- Create Server Actions with the `'use server'` directive
+- Place Server Actions in separate files (e.g., `actions.ts`) or at the top of Server Component files
+- Never perform mutations directly in Client Components
+- Never perform mutations in API routes unless specifically required for external integrations
+
+**Example:**
+
+```typescript
+// app/decks/actions.ts
+'use server';
+
+import { db } from '@/db';
+import { decksTable } from '@/db/schema';
+import { auth } from '@clerk/nextjs/server';
+
+export async function createDeck(data: CreateDeckInput) {
+	const { userId } = await auth();
+
+	if (!userId) {
+		throw new Error('Unauthorized');
+	}
+
+	await db.insert(decksTable).values({
+		userId,
+		name: data.name,
+		description: data.description,
+	});
+}
+```
+
+## Data Validation
+
+**All data must be validated using Zod.**
+
+- Define Zod schemas for all inputs to Server Actions
+- Validate data at the Server Action boundary before processing
+- Return validation errors to the client in a structured format
+- Never trust client-side data without server-side validation
+
+**Example:**
+
+```typescript
+// app/decks/actions.ts
+'use server';
+
+import { z } from 'zod';
+import { db } from '@/db';
+import { decksTable } from '@/db/schema';
+
+// Define Zod schema
+const createDeckSchema = z.object({
+	name: z.string().min(1, 'Name is required').max(100),
+	description: z.string().max(500).optional(),
+});
+
+// Define TypeScript type from schema
+type CreateDeckInput = z.infer<typeof createDeckSchema>;
+
+export async function createDeck(data: CreateDeckInput) {
+	// Validate input
+	const validatedData = createDeckSchema.parse(data);
+
+	// Proceed with database operation
+	await db.insert(decksTable).values({
+		userId,
+		name: validatedData.name,
+		description: validatedData.description,
+	});
+}
+```
+
+## Server Action Parameters
+
+**Never use FormData as the parameter type for Server Actions.**
+
+- Always define proper TypeScript types for Server Action parameters
+- Use Zod schemas to derive TypeScript types with `z.infer<typeof schema>`
+- Parse and validate the data explicitly
+- This ensures type safety and better developer experience
+
+**❌ Wrong:**
+
+```typescript
+export async function createDeck(formData: FormData) {
+	const name = formData.get('name'); // Type is FormDataEntryValue | null
+	// No validation, no type safety
+}
+```
+
+**✅ Correct:**
+
+```typescript
+const createDeckSchema = z.object({
+	name: z.string().min(1),
+	description: z.string().optional(),
+});
+
+type CreateDeckInput = z.infer<typeof createDeckSchema>;
+
+export async function createDeck(data: CreateDeckInput) {
+	const validatedData = createDeckSchema.parse(data);
+	// Full type safety and validation
+}
+```
+
+## Error Handling
+
+When validation fails or operations error:
+
+- Return structured error responses (not throw in production)
+- Use discriminated unions for success/error states
+- Provide user-friendly error messages
+
+**Example:**
+
+```typescript
+type ActionResult<T> =
+	| { success: true; data: T }
+	| { success: false; error: string };
+
+export async function createDeck(
+	data: CreateDeckInput
+): Promise<ActionResult<Deck>> {
+	try {
+		const validatedData = createDeckSchema.parse(data);
+
+		const [deck] = await db
+			.insert(decksTable)
+			.values(validatedData)
+			.returning();
+
+		return { success: true, data: deck };
+	} catch (error) {
+		if (error instanceof z.ZodError) {
+			return { success: false, error: error.errors[0].message };
+		}
+		return { success: false, error: 'Failed to create deck' };
+	}
+}
+```
+
+## Critical Checklist
+
+Before implementing any data operation:
+
+- [ ] Is data retrieval happening in a Server Component?
+- [ ] Are mutations using Server Actions (not Client Components or API routes)?
+- [ ] Is there a Zod schema defined for input validation?
+- [ ] Are Server Action parameters properly typed (not FormData)?
+- [ ] Is validation happening at the server boundary?
+- [ ] Are errors handled and returned in a structured way?
+
+## Common Mistakes to Avoid
+
+❌ **Never** fetch data in Client Components (use `'use client'` only for interactivity)
+❌ **Never** perform database mutations in Client Components
+❌ **Never** skip Zod validation for Server Action inputs
+❌ **Never** use `FormData` as a Server Action parameter type
+❌ **Never** trust client data without validation
+❌ **Never** expose database errors directly to the client
