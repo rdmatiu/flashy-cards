@@ -26,12 +26,13 @@ Before any data access operation, always get the authenticated user's ID:
 
 ```typescript
 import { auth } from '@clerk/nextjs/server';
+import { redirect } from 'next/navigation';
 
 const { userId } = await auth();
 
 if (!userId) {
-  // Return 401 Unauthorized or redirect to sign-in
-  return new Response('Unauthorized', { status: 401 });
+	// Redirect to homepage where sign-in/sign-up buttons are
+	redirect('/');
 }
 ```
 
@@ -46,9 +47,9 @@ import { eq, and } from 'drizzle-orm';
 
 // ✅ CORRECT - Filters by userId
 const userDecks = await db
-  .select()
-  .from(decksTable)
-  .where(eq(decksTable.userId, userId));
+	.select()
+	.from(decksTable)
+	.where(eq(decksTable.userId, userId));
 
 // ❌ WRONG - Returns all decks regardless of owner
 const allDecks = await db.select().from(decksTable);
@@ -61,17 +62,12 @@ When updating or deleting data, **ALWAYS** verify the user owns the resource:
 ```typescript
 // ✅ CORRECT - Verifies ownership
 const [deck] = await db
-  .select()
-  .from(decksTable)
-  .where(
-    and(
-      eq(decksTable.id, deckId),
-      eq(decksTable.userId, userId)
-    )
-  );
+	.select()
+	.from(decksTable)
+	.where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)));
 
 if (!deck) {
-  return new Response('Not found or unauthorized', { status: 404 });
+	return new Response('Not found or unauthorized', { status: 404 });
 }
 
 // Proceed with update/delete
@@ -85,21 +81,23 @@ All API routes must check authentication:
 // app/api/decks/route.ts
 import { auth } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { redirect } from 'next/navigation';
 
 export async function GET() {
-  const { userId } = await auth();
-  
-  if (!userId) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-  
-  // Fetch only this user's data
-  const decks = await db
-    .select()
-    .from(decksTable)
-    .where(eq(decksTable.userId, userId));
-  
-  return NextResponse.json(decks);
+	const { userId } = await auth();
+
+	if (!userId) {
+		// Redirect to homepage where sign-in/sign-up buttons are
+		redirect('/');
+	}
+
+	// Fetch only this user's data
+	const decks = await db
+		.select()
+		.from(decksTable)
+		.where(eq(decksTable.userId, userId));
+
+	return NextResponse.json(decks);
 }
 ```
 
@@ -112,19 +110,20 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-  
-  if (!userId) {
-    redirect('/sign-in');
-  }
-  
-  // Fetch user-specific data
-  const decks = await db
-    .select()
-    .from(decksTable)
-    .where(eq(decksTable.userId, userId));
-  
-  return <div>{/* Render decks */}</div>;
+	const { userId } = await auth();
+
+	if (!userId) {
+		// Redirect to homepage where sign-in/sign-up buttons are
+		redirect('/');
+	}
+
+	// Fetch user-specific data
+	const decks = await db
+		.select()
+		.from(decksTable)
+		.where(eq(decksTable.userId, userId));
+
+	return <div>{/* Render decks */}</div>;
 }
 ```
 

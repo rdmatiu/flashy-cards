@@ -2,14 +2,20 @@ import type { Metadata } from 'next';
 import { Poppins } from 'next/font/google';
 import {
 	ClerkProvider,
-	SignInButton,
-	SignUpButton,
 	SignedIn,
 	SignedOut,
 	UserButton,
+	SignIn,
+	SignUp,
 } from '@clerk/nextjs';
 import { dark } from '@clerk/themes';
 import { Button } from '@/components/ui/button';
+import {
+	Dialog,
+	DialogContent,
+	DialogTitle,
+	DialogTrigger,
+} from '@/components/ui/dialog';
 import './globals.css';
 
 const poppins = Poppins({
@@ -41,16 +47,40 @@ export default function RootLayout({
 							<h1 className='text-xl font-semibold'>Flashy Cards</h1>
 							<div className='flex items-center gap-4'>
 								<SignedOut>
-									<SignInButton mode='modal'>
-										<Button className='bg-blue-600 hover:bg-blue-700'>
-											Sign In
-										</Button>
-									</SignInButton>
-									<SignUpButton mode='modal'>
-										<Button className='bg-blue-600 hover:bg-blue-700'>
-											Sign Up
-										</Button>
-									</SignUpButton>
+									<Dialog>
+										<DialogTrigger asChild>
+											<Button className='bg-blue-600 hover:bg-blue-700'>
+												Sign In
+											</Button>
+										</DialogTrigger>
+										<DialogContent>
+											<DialogTitle className='sr-only'>
+												Sign In
+											</DialogTitle>
+											<SignIn
+												routing='hash'
+												forceRedirectUrl='/dashboard'
+												fallbackRedirectUrl='/dashboard'
+											/>
+										</DialogContent>
+									</Dialog>
+									<Dialog>
+										<DialogTrigger asChild>
+											<Button className='bg-blue-600 hover:bg-blue-700'>
+												Sign Up
+											</Button>
+										</DialogTrigger>
+										<DialogContent>
+											<DialogTitle className='sr-only'>
+												Sign Up
+											</DialogTitle>
+											<SignUp
+												routing='hash'
+												forceRedirectUrl='/dashboard'
+												fallbackRedirectUrl='/dashboard'
+											/>
+										</DialogContent>
+									</Dialog>
 								</SignedOut>
 								<SignedIn>
 									<UserButton afterSignOutUrl='/' />

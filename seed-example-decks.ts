@@ -1,6 +1,5 @@
 import 'dotenv/config';
-import { db } from './src/db/index';
-import { decksTable, cardsTable } from './src/db/schema';
+import { createDeck, createCards } from './src/db/queries';
 
 const userId = 'user_35S7DBaLlvlzXLrYzO0TN5doVhH';
 
@@ -10,14 +9,11 @@ async function seedExampleDecks() {
 	try {
 		// Deck 1: English to Spanish
 		console.log('Creating English-Spanish deck...');
-		const [spanishDeck] = await db
-			.insert(decksTable)
-			.values({
-				userId,
-				name: 'Learning Spanish from English',
-				description: 'Common English words and their Spanish translations',
-			})
-			.returning();
+		const spanishDeck = await createDeck({
+			userId,
+			name: 'Learning Spanish from English',
+			description: 'Common English words and their Spanish translations',
+		});
 
 		console.log(`Created deck: ${spanishDeck.name} (ID: ${spanishDeck.id})`);
 
@@ -40,7 +36,7 @@ async function seedExampleDecks() {
 			{ front: 'Love', back: 'Amor' },
 		];
 
-		await db.insert(cardsTable).values(
+		await createCards(
 			spanishCards.map(card => ({
 				deckId: spanishDeck.id,
 				front: card.front,
@@ -52,14 +48,11 @@ async function seedExampleDecks() {
 
 		// Deck 2: British History
 		console.log('Creating British History deck...');
-		const [historyDeck] = await db
-			.insert(decksTable)
-			.values({
-				userId,
-				name: 'British History',
-				description: 'Important events and dates in British history',
-			})
-			.returning();
+		const historyDeck = await createDeck({
+			userId,
+			name: 'British History',
+			description: 'Important events and dates in British history',
+		});
 
 		console.log(`Created deck: ${historyDeck.name} (ID: ${historyDeck.id})`);
 
@@ -127,7 +120,7 @@ async function seedExampleDecks() {
 			},
 		];
 
-		await db.insert(cardsTable).values(
+		await createCards(
 			historyCards.map(card => ({
 				deckId: historyDeck.id,
 				front: card.front,

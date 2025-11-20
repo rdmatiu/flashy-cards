@@ -37,7 +37,11 @@ export default async function Home() {
 						</DialogTrigger>
 						<DialogContent>
 							<DialogTitle className='sr-only'>Sign In</DialogTitle>
-							<SignIn routing='hash' />
+							<SignIn
+								routing='hash'
+								forceRedirectUrl='/dashboard'
+								fallbackRedirectUrl='/dashboard'
+							/>
 						</DialogContent>
 					</Dialog>
 					<Dialog>
@@ -48,7 +52,11 @@ export default async function Home() {
 						</DialogTrigger>
 						<DialogContent>
 							<DialogTitle className='sr-only'>Sign Up</DialogTitle>
-							<SignUp routing='hash' />
+							<SignUp
+								routing='hash'
+								forceRedirectUrl='/dashboard'
+								fallbackRedirectUrl='/dashboard'
+							/>
 						</DialogContent>
 					</Dialog>
 				</div>

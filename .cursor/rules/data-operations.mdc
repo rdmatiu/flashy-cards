@@ -6,31 +6,130 @@ alwaysApply: true
 
 This project follows strict server-side data handling patterns with Next.js App Router.
 
+## 🚨 CRITICAL RULE: Database Query Functions
+
+**ALL database operations MUST be implemented as helper functions in the `src/db/queries/` directory.**
+
+### Absolute Requirements
+
+❌ **NEVER** write raw database queries directly in Server Components
+❌ **NEVER** write raw database queries directly in Server Actions
+❌ **NEVER** import `db` directly in components or actions
+❌ **NEVER** import table schemas outside of the `src/db/queries/` directory
+✅ **ALWAYS** create reusable query functions in `src/db/queries/`
+✅ **ALWAYS** import and call query functions from `src/db/queries/`
+✅ **ONLY** the query functions should interact with the database directly
+
+**If you're about to write a database query outside of `src/db/queries/`, STOP and create a query function first.**
+
+## Database Query Organization
+
+All database operations must be organized in the `src/db/queries/` directory:
+
+```
+src/db/queries/
+  ├── decks.ts      # All deck-related queries
+  ├── cards.ts      # All card-related queries
+  └── index.ts      # Re-export all queries
+```
+
+### Query Function Pattern
+
+**All query functions must:**
+
+- Accept a `userId` parameter for user-scoped operations
+- Include proper TypeScript types
+- Handle filtering by user ownership
+- Return typed data
+- Be exported from their respective files
+
+**Example Query File:**
+
+```typescript
+// src/db/queries/decks.ts
+import { db } from '@/db';
+import { decksTable } from '@/db/schema';
+import { eq, and } from 'drizzle-orm';
+
+export async function getUserDecks(userId: string) {
+	return await db
+		.select()
+		.from(decksTable)
+		.where(eq(decksTable.userId, userId));
+}
+
+export async function getDeckById(deckId: number, userId: string) {
+	const [deck] = await db
+		.select()
+		.from(decksTable)
+		.where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)));
+
+	return deck;
+}
+
+export async function createDeck(data: {
+	userId: string;
+	name: string;
+	description?: string;
+}) {
+	const [deck] = await db.insert(decksTable).values(data).returning();
+
+	return deck;
+}
+
+export async function updateDeck(
+	deckId: number,
+	userId: string,
+	data: { name?: string; description?: string }
+) {
+	const [deck] = await db
+		.update(decksTable)
+		.set(data)
+		.where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)))
+		.returning();
+
+	return deck;
+}
+
+export async function deleteDeck(deckId: number, userId: string) {
+	await db
+		.delete(decksTable)
+		.where(and(eq(decksTable.id, deckId), eq(decksTable.userId, userId)));
+}
+```
+
+```typescript
+// src/db/queries/index.ts
+export * from './decks';
+export * from './cards';
+```
+
 ## Data Retrieval
 
-**All data fetching must be done in Server Components.**
+**All data fetching must be done in Server Components using query functions.**
 
 - Never fetch data in Client Components
-- Use Server Components to query the database and pass data as props to Client Components
-- Import database utilities from [index.ts](mdc:src/db/index.ts) and schema from [schema.ts](mdc:src/db/schema.ts)
+- Use Server Components to call query functions and pass data as props to Client Components
+- Import query functions from `@/db/queries`
+- Never import `db` or table schemas directly in Server Components
 
 **Example:**
 
 ```typescript
 // app/dashboard/page.tsx (Server Component)
-import { db } from '@/db';
-import { decksTable } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
-import { eq } from 'drizzle-orm';
+import { getUserDecks } from '@/db/queries';
+import { redirect } from 'next/navigation';
 
 export default async function DashboardPage() {
 	const { userId } = await auth();
 
-	// Fetch data in Server Component
-	const decks = await db
-		.select()
-		.from(decksTable)
-		.where(eq(decksTable.userId, userId));
+	if (!userId) {
+		redirect('/');
+	}
+
+	// Use query function instead of raw database query
+	const decks = await getUserDecks(userId);
 
 	return <ClientComponent decks={decks} />;
 }
@@ -38,12 +137,14 @@ export default async function DashboardPage() {
 
 ## Data Mutations
 
-**All database mutations (INSERT, UPDATE, DELETE) must be done via Server Actions.**
+**All database mutations (INSERT, UPDATE, DELETE) must be done via Server Actions using query functions.**
 
 - Create Server Actions with the `'use server'` directive
 - Place Server Actions in separate files (e.g., `actions.ts`) or at the top of Server Component files
+- Call query functions from `@/db/queries` for all database operations
 - Never perform mutations directly in Client Components
 - Never perform mutations in API routes unless specifically required for external integrations
+- Never import `db` or table schemas directly in Server Actions
 
 **Example:**
 
@@ -51,22 +152,49 @@ export default async function DashboardPage() {
 // app/decks/actions.ts
 'use server';
 
-import { db } from '@/db';
-import { decksTable } from '@/db/schema';
 import { auth } from '@clerk/nextjs/server';
+import { createDeck, updateDeck, deleteDeck } from '@/db/queries';
+import { redirect } from 'next/navigation';
 
-export async function createDeck(data: CreateDeckInput) {
+export async function createDeckAction(data: CreateDeckInput) {
 	const { userId } = await auth();
 
 	if (!userId) {
-		throw new Error('Unauthorized');
+		redirect('/');
 	}
 
-	await db.insert(decksTable).values({
+	// Use query function instead of raw database operation
+	const deck = await createDeck({
 		userId,
 		name: data.name,
 		description: data.description,
 	});
+
+	return deck;
+}
+
+export async function updateDeckAction(deckId: number, data: UpdateDeckInput) {
+	const { userId } = await auth();
+
+	if (!userId) {
+		redirect('/');
+	}
+
+	// Use query function
+	const deck = await updateDeck(deckId, userId, data);
+
+	return deck;
+}
+
+export async function deleteDeckAction(deckId: number) {
+	const { userId } = await auth();
+
+	if (!userId) {
+		redirect('/');
+	}
+
+	// Use query function
+	await deleteDeck(deckId, userId);
 }
 ```
 
@@ -78,6 +206,7 @@ export async function createDeck(data: CreateDeckInput) {
 - Validate data at the Server Action boundary before processing
 - Return validation errors to the client in a structured format
 - Never trust client-side data without server-side validation
+- Pass validated data to query functions
 
 **Example:**
 
@@ -86,8 +215,9 @@ export async function createDeck(data: CreateDeckInput) {
 'use server';
 
 import { z } from 'zod';
-import { db } from '@/db';
-import { decksTable } from '@/db/schema';
+import { auth } from '@clerk/nextjs/server';
+import { createDeck } from '@/db/queries';
+import { redirect } from 'next/navigation';
 
 // Define Zod schema
 const createDeckSchema = z.object({
@@ -98,16 +228,24 @@ const createDeckSchema = z.object({
 // Define TypeScript type from schema
 type CreateDeckInput = z.infer<typeof createDeckSchema>;
 
-export async function createDeck(data: CreateDeckInput) {
+export async function createDeckAction(data: CreateDeckInput) {
+	const { userId } = await auth();
+
+	if (!userId) {
+		redirect('/');
+	}
+
 	// Validate input
 	const validatedData = createDeckSchema.parse(data);
 
-	// Proceed with database operation
-	await db.insert(decksTable).values({
+	// Use query function with validated data
+	const deck = await createDeck({
 		userId,
 		name: validatedData.name,
 		description: validatedData.description,
 	});
+
+	return deck;
 }
 ```
 
@@ -156,20 +294,43 @@ When validation fails or operations error:
 **Example:**
 
 ```typescript
+// app/decks/actions.ts
+'use server';
+
+import { z } from 'zod';
+import { auth } from '@clerk/nextjs/server';
+import { createDeck } from '@/db/queries';
+import { redirect } from 'next/navigation';
+
 type ActionResult<T> =
 	| { success: true; data: T }
 	| { success: false; error: string };
 
-export async function createDeck(
+const createDeckSchema = z.object({
+	name: z.string().min(1, 'Name is required').max(100),
+	description: z.string().max(500).optional(),
+});
+
+type CreateDeckInput = z.infer<typeof createDeckSchema>;
+
+export async function createDeckAction(
 	data: CreateDeckInput
 ): Promise<ActionResult<Deck>> {
 	try {
+		const { userId } = await auth();
+
+		if (!userId) {
+			redirect('/');
+		}
+
 		const validatedData = createDeckSchema.parse(data);
 
-		const [deck] = await db
-			.insert(decksTable)
-			.values(validatedData)
-			.returning();
+		// Use query function
+		const deck = await createDeck({
+			userId,
+			name: validatedData.name,
+			description: validatedData.description,
+		});
 
 		return { success: true, data: deck };
 	} catch (error) {
@@ -185,18 +346,25 @@ export async function createDeck(
 
 Before implementing any data operation:
 
+- [ ] Have I created query functions in `src/db/queries/` for all database operations?
+- [ ] Am I importing query functions from `@/db/queries` (not importing `db` directly)?
 - [ ] Is data retrieval happening in a Server Component?
 - [ ] Are mutations using Server Actions (not Client Components or API routes)?
 - [ ] Is there a Zod schema defined for input validation?
 - [ ] Are Server Action parameters properly typed (not FormData)?
 - [ ] Is validation happening at the server boundary?
 - [ ] Are errors handled and returned in a structured way?
+- [ ] Do all query functions accept `userId` for user-scoped operations?
 
 ## Common Mistakes to Avoid
 
+❌ **Never** write database queries directly in Server Components or Server Actions
+❌ **Never** import `db` directly in components or actions
+❌ **Never** import table schemas outside of `src/db/queries/`
 ❌ **Never** fetch data in Client Components (use `'use client'` only for interactivity)
 ❌ **Never** perform database mutations in Client Components
 ❌ **Never** skip Zod validation for Server Action inputs
 ❌ **Never** use `FormData` as a Server Action parameter type
 ❌ **Never** trust client data without validation
 ❌ **Never** expose database errors directly to the client
+❌ **Never** forget to filter by `userId` in query functions for user-scoped data
